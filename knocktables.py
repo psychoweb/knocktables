@@ -20,7 +20,10 @@ for i in range (0,len(arguments.args)):
     elif len(args_splitted) == 2:
       sequence.append({ 'port': args_splitted[0], 'protocol': args_splitted[1], 'time': '5'})
     else:
-      sequence.append({ 'port': args_splitted[0], 'protocol': 'tcp', 'time': '5'})
+      if '/' in arguments.args[i]:
+        sequence.append({ 'port': args_splitted[0], 'protocol': 'icmp', 'time': '5'})
+      else:
+        sequence.append({ 'port': args_splitted[0], 'protocol': 'tcp', 'time': '5'})
 
 #parameters sanity check
 for s in sequence:
@@ -33,25 +36,29 @@ for s in sequence:
   if s['protocol'] == 'icmp':
     icmp_split = s['port'].split('/')
     if len(icmp_split) != 2 or not all(p.isdigit() and int(p) in range(0,256) for p in icmp_split):
-      print('Invalid icmp specification (%s). Must be in form of "type/code"'%(s['port']))
+      print('Invalid icmp specification (%s). Must be in form of "type/code"\n(with "type" and "code" between 0 and 255)'%(s['port']))
       sys.exit(1)
   if not s['time'].isdigit():
     print("Invalid time specified (%s)"%(s['time']))
     sys.exit(1)
-  
+if sequence[-1]['protocol'] not in ('tcp','udp'):
+  print('Target (last sequence) protocol must be one of "tcp","udp" (it can\'t be "icmp")')
+  sys.exit(1)  
+
 target = sequence[-1]
 first_knock = sequence[0]
 
-print("""*filter
-:INPUT ACCEPT [0:0]
-:FORWARD ACCEPT [0:0]
-:OUTPUT ACCEPT [0:0]""")
+print("*filter\n"
+      ":INPUT ACCEPT [0:0]\n"
+      ":FORWARD ACCEPT [0:0]\n"
+      ":OUTPUT ACCEPT [0:0]""")
 
 
 #target port goes at the beginning so that it won't interfere with previous similar sequences
 print("-A INPUT -p %s -m %s --dport %s -m state --state NEW"
-      " -m recent --rcheck --name knock_%d --seconds %s --rsource -j ACCEPT"%
-      (target['protocol'],target['protocol'],target['port'],len(sequence)-2,target['time']))
+      " -m recent --rcheck --name knock_%d --seconds %s --rsource"
+      " -m recent --remove --name knock_%d --rsource -j ACCEPT"%
+      (target['protocol'],target['protocol'],target['port'],len(sequence)-2,target['time'],len(sequence)-2))
 
 
 for i in range(len(sequence)-2,0,-1):
