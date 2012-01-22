@@ -6,6 +6,7 @@ import subprocess
 import argparse
 import struct
 import time
+import errno
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--verbose','-v',action='store_true')
@@ -49,7 +50,12 @@ for s in sequence:
   except socket.error:
     pass
   if s['mode'] == 'icmp':
-    icmp = socket.socket(socket.AF_INET,socket.SOCK_RAW,socket.getprotobyname('icmp'))
+    try:
+      icmp = socket.socket(socket.AF_INET,socket.SOCK_RAW,socket.getprotobyname('icmp'))
+    except socket.error as e:
+      if e.errno == errno.EPERM:
+        print("You need root privileges to send ICMP packets")
+        sys.exit(1)
     icmp_type, icmp_code = s['token'].split('/')
     icmp_checksum =  (~((int(icmp_type) * 256 ) + int(icmp_code)) ) & 0xffff
     icmp.connect((target,42))
@@ -58,7 +64,12 @@ for s in sequence:
     #introduce a small delay not to overlay ICMP packets
     time.sleep(0.05)
   elif s['mode'] == 'idseq':
-    icmp = socket.socket(socket.AF_INET,socket.SOCK_RAW,socket.getprotobyname('icmp'))
+    try:
+      icmp = socket.socket(socket.AF_INET,socket.SOCK_RAW,socket.getprotobyname('icmp'))
+    except socket.error as e:
+      if e.errno == errno.EPERM:
+        print("You need root privileges to send ICMP packets")
+        sys.exit(1)
     icmp_idseq = s['token']
     icmp_checksum =  (~((8 * 256 ) + 0 + (int(icmp_idseq,16)) ) ) & 0xffff
     icmp.connect((target,42))
