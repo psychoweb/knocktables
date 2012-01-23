@@ -33,8 +33,8 @@ for i in range (0,len(arguments.sequence)):
     else:
       if '/' in arguments.sequence[i]:
         sequence.append({ 'token': sequence_splitted[0], 'mode': 'icmp'})
-      elif arguments.sequence[i].startswith('0x'):
-        sequence.append({ 'token': sequence_splitted[0], 'mode': 'idseq'})
+      elif arguments.sequence[i].lower().startswith('0x'):
+        sequence.append({ 'token': sequence_splitted[0], 'mode': 'payload'})
       else:
         sequence.append({ 'token': sequence_splitted[0], 'mode': 'tcp'})
 
@@ -77,4 +77,19 @@ for s in sequence:
     icmp.close()
     #introduce a small delay not to overlay ICMP packets
     time.sleep(0.05)
+  elif s['mode'] == 'payload':
+    try:
+      icmp = socket.socket(socket.AF_INET,socket.SOCK_RAW,socket.getprotobyname('icmp'))
+    except socket.error as e:
+      if e.errno == errno.EPERM:
+        print("You need root privileges to send ICMP packets")
+        sys.exit(1)
+    icmp_payload = s['token']
+    icmp_checksum =  (~((8 * 256 ) + 0 + (int(icmp_payload,16)) ) ) & 0xffff
+    icmp.connect((target,42))
+    icmp.send(struct.pack('!BBHII',8,0,icmp_checksum,0,int(icmp_payload,16)))
+    icmp.close()
+    #introduce a small delay not to overlay ICMP packets
+    time.sleep(0.05)
+   
    

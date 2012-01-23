@@ -1,18 +1,23 @@
 #!/usr/bin/env python2
 
 import sys
-from argparse import ArgumentParser
+from argparse import ArgumentParser,RawDescriptionHelpFormatter
 
 
-parser = ArgumentParser(description='Creates a safe port-knocking rules sequence to be used with iptables.',
-                        epilog="SEQUENCE_TOKEN is an integer port number for MODE 'tcp' or 'udp', or a 4 bytes hex value\
-                          for MODE 'idseq' (that forms the 'Identifier' and 'Sequence Number' fields of the ICMP ping packet)")
+parser = ArgumentParser(formatter_class=RawDescriptionHelpFormatter,description='Creates a safe port-knocking rules sequence to be used with iptables.',
+epilog="""MODE:
+    tcp: attempts to establish a TCP connection to SEQUENCE_TOKEN port
+    udp: sends an UDP datagram to SEQUENCE_TOKEN port
+   icmp: sends a custom ICMP packet with type and code specified by SEQUENCE_TOKEN separated by '/' (ex: '8/5')
+  idseq: sends an ICMP Echo Request (ping) with a 4-bytes hex value reserved for "Identifier" and "Sequence Number"
+payload: sends an ICMP Echo Request (ping) with a 4-bytes hex attached payload specified by SEQUENCE_TOKEN
+""")
 parser.add_argument("sequence",metavar="SEQUENCE_TOKEN[:MODE]",nargs='+')
 parser.add_argument("sequence",metavar="TARGET_PORT[:TARGET_PROTOCOL]", action='append')
 arguments = parser.parse_args()
 
 #removing 'icmp' mode as idseq is more reliable
-allowed_modes = ('tcp','udp','idseq')
+allowed_modes = ('tcp','udp','idseq','payload')
 sequence = []
 
 #set default values
@@ -30,7 +35,7 @@ for i in range (0,len(arguments.sequence)):
       if '/' in arguments.sequence[i]:
         sequence.append({ 'token': sequence_splitted[0], 'mode': 'icmp', 'time': '5'})
       elif arguments.sequence[i].lower().startswith('0x'):
-        sequence.append({ 'token': sequence_splitted[0], 'mode': 'idseq', 'time': '5'})
+        sequence.append({ 'token': sequence_splitted[0], 'mode': 'payload', 'time': '5'})
       else:
         sequence.append({ 'token': sequence_splitted[0], 'mode': 'tcp', 'time': '5'})
 
@@ -47,10 +52,10 @@ for s in sequence:
     if len(icmp_split) != 2 or not all(p.isdigit() and int(p) in range(0,256) for p in icmp_split):
       print('Invalid icmp specification (%s). Must be in form of "type/code"\n(with "type" and "code" between 0 and 255)'%(s['token']))
       sys.exit(1)
-  if s['mode'] == 'idseq':
+  if s['mode'] in ('idseq','payload'):
     try:
-      idseq = int(s['token'],16)
-      if idseq > 0xFFFFFFFF :
+      icmp_bytes = int(s['token'],16)
+      if icmp_bytes > 0xFFFFFFFF :
         raise ValueError()
     except ValueError:
       print('Invalid idseq specified (%s). Must be a valid 4-bytes hex value (ex: 0xF9E80C)'%(s['token']))
@@ -93,6 +98,13 @@ for i in range(len(sequence)-2,0,-1):
           " -m recent --remove --name knock_%d --rsource"
           " -m recent --set --name knock_%d  --rsource -j ACCEPT"%
           (sequence[i]['token'],i-1,sequence[i]['time'],i-1,i))
+  elif sequence[i]['mode'] == 'payload':
+    print("-A INPUT -p icmp -m icmp --icmp-type 8/0"
+          " -m u32 --u32 0>>22&0x3C@8&0xFFFFFFFF=%s"
+          " -m recent --update --name knock_%d --seconds %s --rsource"
+          " -m recent --remove --name knock_%d --rsource"
+          " -m recent --set --name knock_%d  --rsource -j ACCEPT"%
+          (sequence[i]['token'],i-1,sequence[i]['time'],i-1,i))
 
   elif sequence[i]['mode'] in ('tcp','udp'):
     if sequence[i] == target:
@@ -114,6 +126,11 @@ if first_knock['mode'] == 'icmp':
 elif first_knock['mode'] == 'idseq':
   print("-A INPUT -p icmp -m icmp --icmp-type 8/0"
         " -m u32 --u32 0>>22&0x3C@4&0xFFFFFFFF=%s"
+        " -m recent --set --name knock_%d --rsource -j ACCEPT"%
+        (first_knock['token'],0))
+elif first_knock['mode'] == 'payload':
+  print("-A INPUT -p icmp -m icmp --icmp-type 8/0"
+        " -m u32 --u32 0>>22&0x3C@8&0xFFFFFFFF=%s"
         " -m recent --set --name knock_%d --rsource -j ACCEPT"%
         (first_knock['token'],0))
 elif first_knock['mode'] in ('tcp','udp'):
