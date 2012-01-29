@@ -6,13 +6,13 @@ from argparse import ArgumentParser,RawDescriptionHelpFormatter
 
 parser = ArgumentParser(formatter_class=RawDescriptionHelpFormatter,description='Creates a safe port-knocking rules sequence to be used with iptables.',
 epilog="""MODE:
-    tcp: attempts to establish a TCP connection to SEQUENCE_TOKEN port
-    udp: sends an UDP datagram to SEQUENCE_TOKEN port
-   icmp: sends a custom ICMP packet with type and code specified by SEQUENCE_TOKEN separated by '/' (ex: '8/5')
-  idseq: sends an ICMP Echo Request (ping) with a 4-bytes hex value reserved for "Identifier" and "Sequence Number"
-payload: sends an ICMP Echo Request (ping) with a 4-bytes hex attached payload specified by SEQUENCE_TOKEN
+    tcp: attempts to establish a TCP connection to TOKEN port
+    udp: sends an UDP datagram to TOKEN port
+   icmp: sends a custom ICMP packet with type and code specified by TOKEN separated by '/' (ex: '8/5')
+  idseq: sends an ICMP Echo Request (ping) packet with a 4-bytes hex value reserved for "Identifier" and "Sequence Number"
+payload: sends an ICMP Echo Request (ping) packet with a 4-bytes hex attached payload specified by TOKEN [RECOMMENDED]
 """)
-parser.add_argument("sequence",metavar="SEQUENCE_TOKEN[:MODE]",nargs='+')
+parser.add_argument("sequence",metavar="TOKEN[:MODE]",nargs='+')
 parser.add_argument("sequence",metavar="TARGET_PORT[:TARGET_PROTOCOL]", action='append')
 arguments = parser.parse_args()
 
